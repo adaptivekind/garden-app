@@ -119,7 +119,12 @@ function checkPort(port, callback) {
 function createTray() {
   tray = new Tray(path.join(__dirname, 'menu-icon.png'));
   tray.setToolTip('Garden App');
-  tray.on('click', configureDirectory);
+  tray.on('click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
   updateTrayMenu();
 }
 
@@ -140,15 +145,6 @@ function updateTrayMenu() {
     {
       label: 'Restart Garden',
       click: restartGarden
-    },
-    {
-      label: 'Show Window',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        }
-      }
     },
     { type: 'separator' },
     {
