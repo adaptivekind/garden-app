@@ -1,10 +1,13 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, dialog } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const net = require('net');
+const fs = require('fs');
 
 let mainWindow;
 let gardenProcess;
+let tray;
+let currentGardenPath = process.env.HOME + '/projects/things';
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -37,7 +40,7 @@ function createWindow() {
 
 function startGarden() {
   return new Promise((resolve, reject) => {
-    const gardenPath = process.env.HOME + '/projects/things';
+    const gardenPath = currentGardenPath;
     
     gardenProcess = spawn('garden', ['-p', '8888'], {
       cwd: gardenPath,
@@ -88,8 +91,95 @@ function checkPort(port, callback) {
   socket.connect(port, 'localhost');
 }
 
+function createTray() {
+  tray = new Tray(path.join(__dirname, 'menu-icon.png'));
+  
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Configure Directory',
+      click: configureDirectory
+    },
+    {
+      label: 'Current Directory',
+      sublabel: currentGardenPath,
+      enabled: false
+    },
+    { type: 'separator' },
+    {
+      label: 'Restart Garden',
+      click: restartGarden
+    },
+    {
+      label: 'Show Window',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        if (gardenProcess) {
+          gardenProcess.kill('SIGTERM');
+          setTimeout(() => {
+            if (gardenProcess && !gardenProcess.killed) {
+              gardenProcess.kill('SIGKILL');
+            }
+          }, 1000);
+        }
+        app.quit();
+      }
+    }
+  ]);
+  
+  tray.setContextMenu(contextMenu);
+  tray.setToolTip('Garden App');
+  
+  tray.on('click', configureDirectory);
+}
+
+async function configureDirectory() {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select Garden Directory',
+    defaultPath: currentGardenPath
+  });
+  
+  if (!result.canceled && result.filePaths.length > 0) {
+    const newPath = result.filePaths[0];
+    currentGardenPath = newPath;
+    
+    // Update tray menu to show new directory
+    createTray();
+    
+    // Restart garden with new directory
+    restartGarden();
+  }
+}
+
+function restartGarden() {
+  if (gardenProcess) {
+    gardenProcess.kill();
+  }
+  
+  mainWindow.loadFile('loading.html');
+  
+  startGarden().then(() => {
+    setTimeout(() => {
+      mainWindow.loadURL('http://localhost:8888');
+    }, 1000);
+  }).catch((error) => {
+    console.error('Error starting garden:', error);
+    mainWindow.loadFile('error.html');
+  });
+}
+
 app.whenReady().then(() => {
   createWindow();
+  createTray();
   
   startGarden().then(() => {
     setTimeout(() => {
@@ -109,7 +199,12 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (gardenProcess) {
-    gardenProcess.kill();
+    gardenProcess.kill('SIGTERM');
+    setTimeout(() => {
+      if (gardenProcess && !gardenProcess.killed) {
+        gardenProcess.kill('SIGKILL');
+      }
+    }, 2000);
   }
   if (process.platform !== 'darwin') {
     app.quit();
@@ -118,6 +213,11 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   if (gardenProcess) {
-    gardenProcess.kill();
+    gardenProcess.kill('SIGTERM');
+    setTimeout(() => {
+      if (gardenProcess && !gardenProcess.killed) {
+        gardenProcess.kill('SIGKILL');
+      }
+    }, 2000);
   }
 });

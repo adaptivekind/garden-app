@@ -3,7 +3,10 @@
     "allow": [
       "mcp__markdown-reader__find_markdown_files",
       "mcp__markdown-reader__read_markdown_file",
-      "Bash(npm install)"
+      "Bash(npm install)",
+      "Bash(convert:*)",
+      "Bash(node:*)",
+      "Bash(npm install:*)"
     ],
     "deny": []
   }
