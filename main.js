@@ -8,6 +8,7 @@ let mainWindow;
 let gardenProcess;
 let tray;
 let currentGardenPath = process.env.HOME + '/projects/things';
+let recentDirectories = [];
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -128,14 +129,55 @@ function createTray() {
   updateTrayMenu();
 }
 
+function addToRecentDirectories(dirPath) {
+  // Remove if already exists
+  recentDirectories = recentDirectories.filter(dir => dir !== dirPath);
+  
+  // Add to beginning
+  recentDirectories.unshift(dirPath);
+  
+  // Keep only last 5
+  if (recentDirectories.length > 5) {
+    recentDirectories = recentDirectories.slice(0, 5);
+  }
+}
+
+function switchToDirectory(dirPath) {
+  if (fs.existsSync(dirPath)) {
+    currentGardenPath = dirPath;
+    addToRecentDirectories(dirPath);
+    updateTrayMenu();
+    restartGarden();
+  }
+}
+
 function updateTrayMenu() {
   if (!tray) return;
+  
+  // Build recent directories submenu
+  const recentDirsMenu = recentDirectories.map(dir => ({
+    label: path.basename(dir),
+    sublabel: dir,
+    click: () => switchToDirectory(dir)
+  }));
+  
+  if (recentDirsMenu.length === 0) {
+    recentDirsMenu.push({
+      label: 'No recent directories',
+      enabled: false
+    });
+  }
   
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Configure Directory',
       click: configureDirectory
     },
+    {
+      label: 'Recent Directories',
+      submenu: recentDirsMenu
+    },
+    { type: 'separator' },
     {
       label: 'Current Directory',
       sublabel: currentGardenPath,
@@ -176,6 +218,9 @@ async function configureDirectory() {
   if (!result.canceled && result.filePaths.length > 0) {
     const newPath = result.filePaths[0];
     currentGardenPath = newPath;
+    
+    // Add to recent directories
+    addToRecentDirectories(newPath);
     
     // Update tray menu to show new directory
     updateTrayMenu();
