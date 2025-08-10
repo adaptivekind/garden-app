@@ -118,6 +118,13 @@ function checkPort(port, callback) {
 
 function createTray() {
   tray = new Tray(path.join(__dirname, 'menu-icon.png'));
+  tray.setToolTip('Garden App');
+  tray.on('click', configureDirectory);
+  updateTrayMenu();
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
   
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -161,9 +168,6 @@ function createTray() {
   ]);
   
   tray.setContextMenu(contextMenu);
-  tray.setToolTip('Garden App');
-  
-  tray.on('click', configureDirectory);
 }
 
 async function configureDirectory() {
@@ -178,7 +182,7 @@ async function configureDirectory() {
     currentGardenPath = newPath;
     
     // Update tray menu to show new directory
-    createTray();
+    updateTrayMenu();
     
     // Restart garden with new directory
     restartGarden();
