@@ -51,7 +51,8 @@ function startGarden() {
     
     gardenProcess = spawn('garden', ['-p', '8888'], {
       cwd: gardenPath,
-      stdio: 'pipe'
+      stdio: 'pipe',
+      env: { ...process.env, PATH: process.env.PATH + ':/opt/homebrew/bin' }
     });
 
     let stderr = '';
@@ -61,8 +62,10 @@ function startGarden() {
 
     gardenProcess.on('error', (error) => {
       console.error('Failed to start garden:', error);
+      console.error('PATH:', process.env.PATH);
+      console.error('Working directory:', gardenPath);
       if (error.code === 'ENOENT') {
-        reject(new Error('Garden command not found. Please install garden first.'));
+        reject(new Error('Garden command not found. Please install @adaptivekind/garden globally: npm install -g @adaptivekind/garden'));
       } else {
         reject(error);
       }
