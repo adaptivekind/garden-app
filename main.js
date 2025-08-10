@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, Tray, Menu, dialog } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, dialog, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const net = require('net');
@@ -17,7 +17,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      webSecurity: false
+      webSecurity: false,
+      preload: path.join(__dirname, 'preload.js')
     },
     show: false
   });
@@ -42,30 +43,51 @@ function startGarden() {
   return new Promise((resolve, reject) => {
     const gardenPath = currentGardenPath;
     
+    // Check if directory exists
+    if (!fs.existsSync(gardenPath)) {
+      reject(new Error(`Directory does not exist: ${gardenPath}`));
+      return;
+    }
+    
     gardenProcess = spawn('garden', ['-p', '8888'], {
       cwd: gardenPath,
-      stdio: 'inherit'
+      stdio: 'pipe'
+    });
+
+    let stderr = '';
+    gardenProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
     });
 
     gardenProcess.on('error', (error) => {
       console.error('Failed to start garden:', error);
-      reject(error);
+      if (error.code === 'ENOENT') {
+        reject(new Error('Garden command not found. Please install garden first.'));
+      } else {
+        reject(error);
+      }
     });
 
     gardenProcess.on('exit', (code) => {
       console.log(`Garden process exited with code ${code}`);
-    });
-
-    checkPort(8888, (isOpen) => {
-      if (isOpen) {
-        resolve();
-      } else {
-        setTimeout(() => checkPort(8888, (isOpen) => {
-          if (isOpen) resolve();
-          else reject(new Error('Garden server did not start'));
-        }), 2000);
+      if (code !== 0 && stderr) {
+        console.error('Garden stderr:', stderr);
       }
     });
+
+    // Give garden a moment to start before checking port
+    setTimeout(() => {
+      checkPort(8888, (isOpen) => {
+        if (isOpen) {
+          resolve();
+        } else {
+          setTimeout(() => checkPort(8888, (isOpen) => {
+            if (isOpen) resolve();
+            else reject(new Error(`Garden server did not start in directory: ${gardenPath}\n\nPlease ensure:\n1. 'garden' command is installed\n2. Directory contains a valid garden project\n3. Port 8888 is available`));
+          }), 3000);
+        }
+      });
+    }, 1000);
   });
 }
 
@@ -181,14 +203,23 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   
-  startGarden().then(() => {
-    setTimeout(() => {
-      mainWindow.loadURL('http://localhost:8888');
-    }, 1000);
-  }).catch((error) => {
-    console.error('Error starting garden:', error);
+  // Check if default directory exists, if not, prompt user to configure
+  if (!fs.existsSync(currentGardenPath)) {
     mainWindow.loadFile('error.html');
-  });
+    // Show directory configuration dialog after a brief delay
+    setTimeout(() => {
+      configureDirectory();
+    }, 2000);
+  } else {
+    startGarden().then(() => {
+      setTimeout(() => {
+        mainWindow.loadURL('http://localhost:8888');
+      }, 1000);
+    }).catch((error) => {
+      console.error('Error starting garden:', error);
+      mainWindow.loadFile('error.html');
+    });
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -220,4 +251,17 @@ app.on('before-quit', () => {
       }
     }, 2000);
   }
+});
+
+// IPC handlers
+ipcMain.handle('restart-garden', async () => {
+  return new Promise((resolve) => {
+    restartGarden();
+    resolve(true);
+  });
+});
+
+ipcMain.handle('configure-directory', async () => {
+  await configureDirectory();
+  return true;
 });

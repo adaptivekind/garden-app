@@ -50,10 +50,52 @@
 </head>
 <body>
     <div class="error-container">
-        <h1>⚠️ Error</h1>
-        <p>Failed to start the garden server.</p>
-        <p>Please ensure garden is installed and the ~/projects/things directory exists.</p>
-        <button class="retry-button" onclick="location.reload()">Retry</button>
+        <h1>⚠️ Garden Setup Required</h1>
+        <p>Could not start the garden server.</p>
+        <div style="text-align: left; max-width: 500px; margin: 20px auto;">
+            <h3>Please ensure:</h3>
+            <ol>
+                <li><strong>Install Garden tool:</strong><br>
+                    <code style="background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 3px;">npm install -g @adaptivekind/garden</code>
+                </li>
+                <li><strong>Verify Garden command works:</strong><br>
+                    <code style="background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 3px;">garden -p 8888</code> in your project directory
+                </li>
+                <li><strong>Directory exists and contains markdown files</strong></li>
+                <li><strong>Configure directory:</strong><br>
+                    Click the menu bar icon (M) → "Configure Directory"
+                </li>
+            </ol>
+        </div>
+        <button class="retry-button" onclick="retryGarden()">Retry</button>
+        <button class="retry-button" onclick="configureDirectory()" style="margin-left: 10px;">Configure Directory</button>
+    </div>
+    <script>
+        async function retryGarden() {
+            const button = document.querySelector('.retry-button');
+            button.textContent = 'Restarting...';
+            button.disabled = true;
+            
+            try {
+                await window.electronAPI.restartGarden();
+            } catch (error) {
+                console.error('Failed to restart garden:', error);
+                button.textContent = 'Retry Failed';
+                setTimeout(() => {
+                    button.textContent = 'Retry';
+                    button.disabled = false;
+                }, 2000);
+            }
+        }
+        
+        async function configureDirectory() {
+            try {
+                await window.electronAPI.configureDirectory();
+            } catch (error) {
+                console.error('Failed to configure directory:', error);
+            }
+        }
+    </script>
     </div>
 </body>
 </html>

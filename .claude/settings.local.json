@@ -6,7 +6,9 @@
       "Bash(npm install)",
       "Bash(convert:*)",
       "Bash(node:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm run build:mac:*)",
+      "Bash(garden:*)"
     ],
     "deny": []
   }
