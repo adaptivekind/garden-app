@@ -3,12 +3,45 @@ const { spawn } = require('child_process');
 const path = require('path');
 const net = require('net');
 const fs = require('fs');
+const os = require('os');
 
 let mainWindow;
 let gardenProcess;
 let tray;
 let currentGardenPath = process.env.HOME + '/projects/things';
 let recentDirectories = [];
+
+// Persistent storage path for recent directories
+const userDataPath = app.getPath('userData');
+const recentDirsFile = path.join(userDataPath, 'recent-directories.json');
+
+function loadRecentDirectories() {
+  try {
+    if (fs.existsSync(recentDirsFile)) {
+      const data = fs.readFileSync(recentDirsFile, 'utf8');
+      const parsed = JSON.parse(data);
+      // Filter out directories that no longer exist
+      recentDirectories = parsed.filter(dir => fs.existsSync(dir));
+      console.log('Loaded recent directories:', recentDirectories);
+    }
+  } catch (error) {
+    console.error('Error loading recent directories:', error);
+    recentDirectories = [];
+  }
+}
+
+function saveRecentDirectories() {
+  try {
+    // Ensure the userData directory exists
+    if (!fs.existsSync(userDataPath)) {
+      fs.mkdirSync(userDataPath, { recursive: true });
+    }
+    fs.writeFileSync(recentDirsFile, JSON.stringify(recentDirectories, null, 2));
+    console.log('Saved recent directories:', recentDirectories);
+  } catch (error) {
+    console.error('Error saving recent directories:', error);
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -140,6 +173,9 @@ function addToRecentDirectories(dirPath) {
   if (recentDirectories.length > 5) {
     recentDirectories = recentDirectories.slice(0, 5);
   }
+  
+  // Save to persistent storage
+  saveRecentDirectories();
 }
 
 function switchToDirectory(dirPath) {
@@ -248,6 +284,9 @@ function restartGarden() {
 }
 
 app.whenReady().then(() => {
+  // Load recent directories from persistent storage
+  loadRecentDirectories();
+  
   createWindow();
   createTray();
   
