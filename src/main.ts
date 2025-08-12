@@ -1,27 +1,26 @@
-const { app, BrowserWindow, shell, Tray, Menu, dialog, ipcMain } = require('electron');
-const { spawn } = require('child_process');
-const path = require('path');
-const net = require('net');
-const fs = require('fs');
-const os = require('os');
+import { app, BrowserWindow, shell, Tray, Menu, dialog, ipcMain } from 'electron';
+import { spawn, ChildProcess } from 'child_process';
+import * as path from 'path';
+import * as net from 'net';
+import * as fs from 'fs';
 
-let mainWindow;
-let gardenProcess;
-let tray;
-let currentGardenPath = process.env.HOME + '/projects/things';
-let recentDirectories = [];
+let mainWindow: BrowserWindow | null = null;
+let gardenProcess: ChildProcess | null = null;
+let tray: Tray | null = null;
+let currentGardenPath: string = process.env.HOME + '/projects/things';
+let recentDirectories: string[] = [];
 
 // Persistent storage path for recent directories
-const userDataPath = app.getPath('userData');
-const recentDirsFile = path.join(userDataPath, 'recent-directories.json');
+const userDataPath: string = app.getPath('userData');
+const recentDirsFile: string = path.join(userDataPath, 'recent-directories.json');
 
-function loadRecentDirectories() {
+function loadRecentDirectories(): void {
   try {
     if (fs.existsSync(recentDirsFile)) {
-      const data = fs.readFileSync(recentDirsFile, 'utf8');
-      const parsed = JSON.parse(data);
+      const data: string = fs.readFileSync(recentDirsFile, 'utf8');
+      const parsed: string[] = JSON.parse(data);
       // Filter out directories that no longer exist
-      recentDirectories = parsed.filter(dir => fs.existsSync(dir));
+      recentDirectories = parsed.filter((dir: string) => fs.existsSync(dir));
       console.log('Loaded recent directories:', recentDirectories);
     }
   } catch (error) {
@@ -30,7 +29,7 @@ function loadRecentDirectories() {
   }
 }
 
-function saveRecentDirectories() {
+function saveRecentDirectories(): void {
   try {
     // Ensure the userData directory exists
     if (!fs.existsSync(userDataPath)) {
@@ -43,14 +42,13 @@ function saveRecentDirectories() {
   }
 }
 
-function createWindow() {
+function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      enableRemoteModule: false,
       webSecurity: false,
       preload: path.join(__dirname, 'preload.js')
     },
@@ -60,7 +58,7 @@ function createWindow() {
   mainWindow.loadFile('loading.html');
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    mainWindow?.show();
   });
 
   mainWindow.on('closed', () => {
@@ -73,9 +71,9 @@ function createWindow() {
   });
 }
 
-function startGarden() {
+function startGarden(): Promise<void> {
   return new Promise((resolve, reject) => {
-    const gardenPath = currentGardenPath;
+    const gardenPath: string = currentGardenPath;
     
     // Check if directory exists
     if (!fs.existsSync(gardenPath)) {
@@ -90,11 +88,11 @@ function startGarden() {
     });
 
     let stderr = '';
-    gardenProcess.stderr.on('data', (data) => {
+    gardenProcess.stderr?.on('data', (data: Buffer) => {
       stderr += data.toString();
     });
 
-    gardenProcess.on('error', (error) => {
+    gardenProcess.on('error', (error: Error & { code?: string }) => {
       console.error('Failed to start garden:', error);
       console.error('PATH:', process.env.PATH);
       console.error('Working directory:', gardenPath);
@@ -105,7 +103,7 @@ function startGarden() {
       }
     });
 
-    gardenProcess.on('exit', (code) => {
+    gardenProcess.on('exit', (code: number | null) => {
       console.log(`Garden process exited with code ${code}`);
       if (code !== 0 && stderr) {
         console.error('Garden stderr:', stderr);
@@ -114,13 +112,18 @@ function startGarden() {
 
     // Give garden a moment to start before checking port
     setTimeout(() => {
-      checkPort(8888, (isOpen) => {
+      checkPort(8888, (isOpen: boolean) => {
         if (isOpen) {
           resolve();
         } else {
-          setTimeout(() => checkPort(8888, (isOpen) => {
+          setTimeout(() => checkPort(8888, (isOpen: boolean) => {
             if (isOpen) resolve();
-            else reject(new Error(`Garden server did not start in directory: ${gardenPath}\n\nPlease ensure:\n1. 'garden' command is installed\n2. Directory contains a valid garden project\n3. Port 8888 is available`));
+            else reject(new Error(`Garden server did not start in directory: ${gardenPath}
+
+Please ensure:
+1. 'garden' command is installed
+2. Directory contains a valid garden project
+3. Port 8888 is available`));
           }), 3000);
         }
       });
@@ -128,7 +131,7 @@ function startGarden() {
   });
 }
 
-function checkPort(port, callback) {
+function checkPort(port: number, callback: (isOpen: boolean) => void): void {
   const socket = new net.Socket();
   
   socket.setTimeout(1000);
@@ -150,7 +153,7 @@ function checkPort(port, callback) {
   socket.connect(port, 'localhost');
 }
 
-function createTray() {
+function createTray(): void {
   tray = new Tray(path.join(__dirname, 'menu-icon.png'));
   tray.setToolTip('Garden App');
   tray.on('click', () => {
@@ -162,9 +165,9 @@ function createTray() {
   updateTrayMenu();
 }
 
-function addToRecentDirectories(dirPath) {
+function addToRecentDirectories(dirPath: string): void {
   // Remove if already exists
-  recentDirectories = recentDirectories.filter(dir => dir !== dirPath);
+  recentDirectories = recentDirectories.filter((dir: string) => dir !== dirPath);
   
   // Add to beginning
   recentDirectories.unshift(dirPath);
@@ -178,7 +181,7 @@ function addToRecentDirectories(dirPath) {
   saveRecentDirectories();
 }
 
-function switchToDirectory(dirPath) {
+function switchToDirectory(dirPath: string): void {
   if (fs.existsSync(dirPath)) {
     currentGardenPath = dirPath;
     addToRecentDirectories(dirPath);
@@ -187,11 +190,11 @@ function switchToDirectory(dirPath) {
   }
 }
 
-function updateTrayMenu() {
+function updateTrayMenu(): void {
   if (!tray) return;
   
   // Build recent directories submenu
-  const recentDirsMenu = recentDirectories.map(dir => ({
+  const recentDirsMenu: Electron.MenuItemConstructorOptions[] = recentDirectories.map((dir: string) => ({
     label: path.basename(dir),
     sublabel: dir,
     click: () => switchToDirectory(dir)
@@ -244,15 +247,15 @@ function updateTrayMenu() {
   tray.setContextMenu(contextMenu);
 }
 
-async function configureDirectory() {
-  const result = await dialog.showOpenDialog(mainWindow, {
+async function configureDirectory(): Promise<void> {
+  const result = await dialog.showOpenDialog(mainWindow!, {
     properties: ['openDirectory'],
     title: 'Select Garden Directory',
     defaultPath: currentGardenPath
   });
   
   if (!result.canceled && result.filePaths.length > 0) {
-    const newPath = result.filePaths[0];
+    const newPath: string = result.filePaths[0];
     currentGardenPath = newPath;
     
     // Add to recent directories
@@ -266,20 +269,20 @@ async function configureDirectory() {
   }
 }
 
-function restartGarden() {
+function restartGarden(): void {
   if (gardenProcess) {
     gardenProcess.kill();
   }
   
-  mainWindow.loadFile('loading.html');
+  mainWindow?.loadFile('loading.html');
   
   startGarden().then(() => {
     setTimeout(() => {
-      mainWindow.loadURL('http://localhost:8888');
+      mainWindow?.loadURL('http://localhost:8888');
     }, 1000);
   }).catch((error) => {
     console.error('Error starting garden:', error);
-    mainWindow.loadFile('error.html');
+    mainWindow?.loadFile('error.html');
   });
 }
 
@@ -292,7 +295,7 @@ app.whenReady().then(() => {
   
   // Check if default directory exists, if not, prompt user to configure
   if (!fs.existsSync(currentGardenPath)) {
-    mainWindow.loadFile('error.html');
+    mainWindow?.loadFile('error.html');
     // Show directory configuration dialog after a brief delay
     setTimeout(() => {
       configureDirectory();
@@ -300,11 +303,11 @@ app.whenReady().then(() => {
   } else {
     startGarden().then(() => {
       setTimeout(() => {
-        mainWindow.loadURL('http://localhost:8888');
+        mainWindow?.loadURL('http://localhost:8888');
       }, 1000);
     }).catch((error) => {
       console.error('Error starting garden:', error);
-      mainWindow.loadFile('error.html');
+      mainWindow?.loadFile('error.html');
     });
   }
 
@@ -341,14 +344,14 @@ app.on('before-quit', () => {
 });
 
 // IPC handlers
-ipcMain.handle('restart-garden', async () => {
+ipcMain.handle('restart-garden', async (): Promise<boolean> => {
   return new Promise((resolve) => {
     restartGarden();
     resolve(true);
   });
 });
 
-ipcMain.handle('configure-directory', async () => {
+ipcMain.handle('configure-directory', async (): Promise<boolean> => {
   await configureDirectory();
   return true;
 });

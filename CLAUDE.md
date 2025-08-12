@@ -5,18 +5,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Essential Commands
 
 ### Development
-- `npm start` - Start the Electron app in production mode
-- `npm run dev` - Start with development flags
+- `npm start` - Compile TypeScript and start the Electron app
+- `npm run dev` - Compile TypeScript and start with development flags
+- `npm run compile` - Compile TypeScript to JavaScript
+- `npm run compile:watch` - Compile TypeScript in watch mode
 - `node create-icon.js` - Regenerate app and menu bar icons
 
 ### Building and Distribution
-- `npm run build:mac` - Build macOS app with DMG
-- `npm run build:mac-no-dmg` - Build macOS app without DMG (faster, directory only)
-- `npm run build` - Build for all configured platforms
-- Built apps are output to `dist/` directory
+- `npm run build:mac` - Compile TypeScript and build macOS app with DMG
+- `npm run build:mac-no-dmg` - Compile TypeScript and build macOS app without DMG (faster, directory only)
+- `npm run build` - Compile TypeScript and build for all configured platforms
+- Built apps are output to `build/` directory
+- Compiled TypeScript is output to `dist/` directory
 
 ### Testing the App
-After making changes, rebuild and test by copying the new `.app` from `dist/mac-arm64/Garden.app` to Applications folder.
+After making changes, rebuild and test by copying the new `.app` from `build/mac-arm64/Garden.app` to Applications folder.
 
 ## Architecture Overview
 
@@ -30,7 +33,7 @@ This is an Electron app that wraps the Garden CLI tool, providing an integrated 
 
 ### Key Components
 
-**main.js** - Main process containing:
+**src/main.ts** - Main process (TypeScript) containing:
 - `createWindow()` - Browser window setup (1200x800, security settings)
 - `startGarden()` - Garden subprocess management with comprehensive error handling
 - `createTray()` - System tray menu with directory configuration
@@ -43,6 +46,11 @@ This is an Electron app that wraps the Garden CLI tool, providing an integrated 
 
 **Icon Generation**:
 - `create-icon.js` - Generates both app icon (512x512) and menu bar icon (32x32)
+
+**TypeScript Configuration**:
+- `src/preload.ts` - Preload script with proper type definitions for IPC
+- `tsconfig.json` - TypeScript compiler configuration
+- `dist/` - Compiled JavaScript output directory
 
 ### State Management
 - `currentGardenPath` - Currently configured Garden project directory

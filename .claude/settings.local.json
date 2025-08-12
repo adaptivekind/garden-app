@@ -10,7 +10,10 @@
       "Bash(npm run build:mac:*)",
       "Bash(garden:*)",
       "Bash(cat:*)",
-      "Bash(npm start)"
+      "Bash(npm start)",
+      "Bash(mkdir:*)",
+      "Bash(npm run compile:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }
