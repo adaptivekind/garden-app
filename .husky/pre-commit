@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# Check for untracked files
+if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+  echo "Error: You have untracked files. Either add them to git or .gitignore:"
+  git ls-files --others --exclude-standard
+  exit 1
+fi
+
+# Run lint-staged for staged files
+npx lint-staged
+
+# Run TypeScript compilation check
+npm run compile

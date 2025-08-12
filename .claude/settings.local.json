@@ -13,7 +13,14 @@
       "Bash(npm start)",
       "Bash(mkdir:*)",
       "Bash(npm run compile:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npx husky init:*)",
+      "Bash(chmod:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run prettier:fix:*)",
+      "Bash(npm run eslint:*)"
     ],
     "deny": []
   }

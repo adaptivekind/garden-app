@@ -8,10 +8,17 @@
     "dev": "npm run compile && electron . --dev",
     "compile": "tsc",
     "compile:watch": "tsc --watch",
-    "build": "npm run compile && electron-builder",
+    "build": "npm run compile",
     "build:mac": "npm run compile && electron-builder --mac",
     "build:mac-no-dmg": "npm run build:mac -- --publish=never --mac dir",
-    "dist": "npm run compile && electron-builder --publish=never"
+    "dist": "npm run compile && electron-builder --publish=never",
+    "prepare": "husky",
+    "eslint": "eslint src --ext .ts",
+    "eslint:fix": "eslint --fix src --ext .ts",
+    "prettier": "npx prettier --check .",
+    "prettier:fix": "npx prettier --write .",
+    "lint": "npm run prettier && npm run eslint",
+    "lint:fix": "npm run prettier:fix && npm run eslint:fix"
   },
   "keywords": [
     "electron",
@@ -21,8 +28,16 @@
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^24.2.1",
+    "@typescript-eslint/eslint-plugin": "^8.39.1",
+    "@typescript-eslint/parser": "^8.39.1",
     "electron": "^27.0.0",
     "electron-builder": "^26.0.12",
+    "eslint": "^9.33.0",
+    "eslint-plugin-sonarjs": "^3.0.4",
+    "globals": "^16.3.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.5",
+    "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   },
@@ -59,5 +74,13 @@
       "title": "Garden App",
       "icon": "icon.png"
     }
+  },
+  "lint-staged": {
+    "*.{ts,js,json,md}": [
+      "prettier --write"
+    ],
+    "*.{ts,js}": [
+      "eslint --fix"
+    ]
   }
 }

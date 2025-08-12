@@ -46,4 +46,3 @@ const appBuffer = appCanvas.toBuffer("image/png");
 fs.writeFileSync("../icon.png", appBuffer);
 
 console.log("Icons created successfully");
-
