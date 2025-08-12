@@ -25,4 +25,3 @@ jobs:
 
       - name: Run TypeScript compilation
         run: npm run compile
-
