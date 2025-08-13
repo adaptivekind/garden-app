@@ -86,6 +86,7 @@ function createWindow(): void {
 }
 
 function sendStatusUpdate(status: string, details?: string): void {
+  console.log(`Status: ${status} | Details: ${details || "none"}`);
   if (mainWindow && mainWindow.webContents) {
     mainWindow.webContents.send("status-update", status, details);
   }
@@ -93,9 +94,13 @@ function sendStatusUpdate(status: string, details?: string): void {
 
 function startGarden(): Promise<void> {
   return new Promise((resolve, reject) => {
+    const startTime = Date.now();
     const gardenPath: string = currentGardenPath;
 
     sendStatusUpdate("Checking directory...", gardenPath);
+    console.log(
+      `[${Date.now() - startTime}ms] Checking directory: ${gardenPath}`,
+    );
 
     // Check if directory exists
     if (!fs.existsSync(gardenPath)) {
@@ -103,6 +108,9 @@ function startGarden(): Promise<void> {
       return;
     }
 
+    console.log(
+      `[${Date.now() - startTime}ms] Directory exists, spawning garden process`,
+    );
     sendStatusUpdate("Starting garden process...", "Running: garden -p 8888");
 
     gardenProcess = spawn("garden", ["-p", "8888"], {
@@ -110,6 +118,10 @@ function startGarden(): Promise<void> {
       stdio: "pipe",
       env: { ...process.env, PATH: process.env.PATH + ":/opt/homebrew/bin" },
     });
+
+    console.log(
+      `[${Date.now() - startTime}ms] Garden process spawned, PID: ${gardenProcess.pid}`,
+    );
 
     let stderr = "";
     gardenProcess.stderr?.on("data", (data: Buffer) => {
@@ -145,6 +157,9 @@ function startGarden(): Promise<void> {
 
     // Give garden a moment to start before checking port
     setTimeout(() => {
+      console.log(
+        `[${Date.now() - startTime}ms] Starting port check after 1s delay`,
+      );
       sendStatusUpdate("Waiting for garden server...", "Checking port 8888");
       checkPort(8888, (isOpen: boolean) => {
         if (isOpen) {

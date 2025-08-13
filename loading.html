@@ -69,33 +69,41 @@
     </div>
 
     <script>
-      // Listen for status updates from the main process
-      if (window.electronAPI) {
-        window.electronAPI.onStatusUpdate?.((status, details) => {
-          document.getElementById('status').textContent = status;
-          document.getElementById('details').textContent = details || '';
-        });
-      }
-
-      // Fallback status updates for when electronAPI isn't available yet
       let statusIndex = 0;
       const statuses = [
-        'Checking directory...',
-        'Starting garden process...',
-        'Waiting for garden server...',
-        'Checking port availability...',
-        'Almost ready...'
+        { status: 'Checking directory...', details: 'Verifying project path exists' },
+        { status: 'Starting garden process...', details: 'Running: garden -p 8888' },
+        { status: 'Waiting for garden server...', details: 'Checking port 8888' },
+        { status: 'Checking port availability...', details: 'Attempting to connect' },
+        { status: 'Retrying connection...', details: 'Port may not be ready yet' },
+        { status: 'Loading garden interface...', details: 'Almost ready...' }
       ];
 
       const updateStatus = () => {
-        if (!window.electronAPI?.onStatusUpdate) {
-          document.getElementById('status').textContent = statuses[statusIndex % statuses.length];
-          statusIndex++;
-        }
+        const current = statuses[statusIndex % statuses.length];
+        document.getElementById('status').textContent = current.status;
+        document.getElementById('details').textContent = current.details;
+        statusIndex++;
       };
 
-      setInterval(updateStatus, 2000);
+      // Update status every 3 seconds
+      setInterval(updateStatus, 3000);
       updateStatus();
+
+      // Try to set up IPC listener when available
+      const setupIPC = () => {
+        if (window.electronAPI && window.electronAPI.onStatusUpdate) {
+          console.log('Setting up IPC status updates');
+          window.electronAPI.onStatusUpdate((status, details) => {
+            console.log('Status update:', status, details);
+            document.getElementById('status').textContent = status;
+            document.getElementById('details').textContent = details || '';
+          });
+        } else {
+          setTimeout(setupIPC, 500);
+        }
+      };
+      setupIPC();
     </script>
   </body>
 </html>
