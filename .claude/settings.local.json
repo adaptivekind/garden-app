@@ -20,7 +20,8 @@
       "Bash(chmod:*)",
       "Bash(npm run lint)",
       "Bash(npm run prettier:fix:*)",
-      "Bash(npm run eslint:*)"
+      "Bash(npm run eslint:*)",
+      "Bash(npm rebuild:*)"
     ],
     "deny": []
   }

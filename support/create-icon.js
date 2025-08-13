@@ -14,7 +14,7 @@ menuCtx.textBaseline = "middle";
 menuCtx.fillText("G", menuSize / 2, menuSize / 2);
 
 const menuBuffer = menuCanvas.toBuffer("image/png");
-fs.writeFileSync("menu-icon.png", menuBuffer);
+fs.writeFileSync("../menu-icon.png", menuBuffer);
 
 // Create app icon (large)
 const appSize = 512;
@@ -35,12 +35,12 @@ appCtx.roundRect(0, 0, appSize, appSize, 50);
 appCtx.fill();
 appCtx.globalCompositeOperation = "source-over";
 
-// Draw white "M"
+// Draw white "G"
 appCtx.fillStyle = "white";
 appCtx.font = "bold 300px Arial";
 appCtx.textAlign = "center";
 appCtx.textBaseline = "middle";
-appCtx.fillText("M", appSize / 2, appSize / 2);
+appCtx.fillText("G", appSize / 2, appSize / 2);
 
 const appBuffer = appCanvas.toBuffer("image/png");
 fs.writeFileSync("../icon.png", appBuffer);
