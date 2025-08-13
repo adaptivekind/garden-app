@@ -46,6 +46,17 @@
         margin: 0;
         opacity: 0.8;
       }
+      #status {
+        margin-top: 10px;
+        font-size: 0.9em;
+        min-height: 1.2em;
+      }
+      #details {
+        margin-top: 5px;
+        font-size: 0.8em;
+        opacity: 0.6;
+        min-height: 1em;
+      }
     </style>
   </head>
   <body>
@@ -53,6 +64,38 @@
       <div class="spinner"></div>
       <h1>Garden App</h1>
       <p>Starting garden server...</p>
+      <div id="status">Initializing...</div>
+      <div id="details"></div>
     </div>
+
+    <script>
+      // Listen for status updates from the main process
+      if (window.electronAPI) {
+        window.electronAPI.onStatusUpdate?.((status, details) => {
+          document.getElementById('status').textContent = status;
+          document.getElementById('details').textContent = details || '';
+        });
+      }
+
+      // Fallback status updates for when electronAPI isn't available yet
+      let statusIndex = 0;
+      const statuses = [
+        'Checking directory...',
+        'Starting garden process...',
+        'Waiting for garden server...',
+        'Checking port availability...',
+        'Almost ready...'
+      ];
+
+      const updateStatus = () => {
+        if (!window.electronAPI?.onStatusUpdate) {
+          document.getElementById('status').textContent = statuses[statusIndex % statuses.length];
+          statusIndex++;
+        }
+      };
+
+      setInterval(updateStatus, 2000);
+      updateStatus();
+    </script>
   </body>
 </html>

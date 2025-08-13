@@ -4,6 +4,9 @@ import { contextBridge, ipcRenderer } from "electron";
 export interface ElectronAPI {
   restartGarden: () => Promise<boolean>;
   configureDirectory: () => Promise<boolean>;
+  onStatusUpdate: (
+    callback: (status: string, details?: string) => void,
+  ) => void;
 }
 
 // Expose protected methods that allow the renderer process to use
@@ -12,6 +15,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   restartGarden: (): Promise<boolean> => ipcRenderer.invoke("restart-garden"),
   configureDirectory: (): Promise<boolean> =>
     ipcRenderer.invoke("configure-directory"),
+  onStatusUpdate: (callback: (status: string, details?: string) => void) => {
+    ipcRenderer.on("status-update", (_, status: string, details?: string) => {
+      callback(status, details);
+    });
+  },
 } as ElectronAPI);
 
 // Extend the global Window interface to include our API

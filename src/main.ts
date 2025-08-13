@@ -85,15 +85,25 @@ function createWindow(): void {
   });
 }
 
+function sendStatusUpdate(status: string, details?: string): void {
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send("status-update", status, details);
+  }
+}
+
 function startGarden(): Promise<void> {
   return new Promise((resolve, reject) => {
     const gardenPath: string = currentGardenPath;
+
+    sendStatusUpdate("Checking directory...", gardenPath);
 
     // Check if directory exists
     if (!fs.existsSync(gardenPath)) {
       reject(new Error(`Directory does not exist: ${gardenPath}`));
       return;
     }
+
+    sendStatusUpdate("Starting garden process...", "Running: garden -p 8888");
 
     gardenProcess = spawn("garden", ["-p", "8888"], {
       cwd: gardenPath,
@@ -111,12 +121,17 @@ function startGarden(): Promise<void> {
       console.error("PATH:", process.env.PATH);
       console.error("Working directory:", gardenPath);
       if (error.code === "ENOENT") {
+        sendStatusUpdate(
+          "Garden command not found",
+          "Please install: npm install -g @adaptivekind/garden",
+        );
         reject(
           new Error(
             "Garden command not found. Please install @adaptivekind/garden globally: npm install -g @adaptivekind/garden",
           ),
         );
       } else {
+        sendStatusUpdate("Garden process error", error.message);
         reject(error);
       }
     });
@@ -130,15 +145,23 @@ function startGarden(): Promise<void> {
 
     // Give garden a moment to start before checking port
     setTimeout(() => {
+      sendStatusUpdate("Waiting for garden server...", "Checking port 8888");
       checkPort(8888, (isOpen: boolean) => {
         if (isOpen) {
+          sendStatusUpdate("Garden server ready!", "Port 8888 is responding");
           resolve();
         } else {
+          sendStatusUpdate("Retrying connection...", "Port 8888 not ready yet");
           setTimeout(
             () =>
               checkPort(8888, (isOpen: boolean) => {
-                if (isOpen) resolve();
-                else
+                if (isOpen) {
+                  sendStatusUpdate(
+                    "Garden server ready!",
+                    "Port 8888 is responding",
+                  );
+                  resolve();
+                } else {
                   reject(
                     new Error(`Garden server did not start in directory: ${gardenPath}
 
@@ -147,6 +170,7 @@ Please ensure:
 2. Directory contains a valid garden project
 3. Port 8888 is available`),
                   );
+                }
               }),
             3000,
           );
