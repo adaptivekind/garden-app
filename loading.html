@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Garden App - Loading</title>
+    <title>Garden App - Loading ...</title>
     <style>
       body {
         margin: 0;
@@ -56,6 +56,8 @@
         font-size: 0.8em;
         opacity: 0.6;
         min-height: 1em;
+        word-break: break-all;
+        max-width: 80vw;
       }
     </style>
   </head>
@@ -69,41 +71,34 @@
     </div>
 
     <script>
-      let statusIndex = 0;
-      const statuses = [
-        { status: 'Checking directory...', details: 'Verifying project path exists' },
-        { status: 'Starting garden process...', details: 'Running: garden -p 8888' },
-        { status: 'Waiting for garden server...', details: 'Checking port 8888' },
-        { status: 'Checking port availability...', details: 'Attempting to connect' },
-        { status: 'Retrying connection...', details: 'Port may not be ready yet' },
-        { status: 'Loading garden interface...', details: 'Almost ready...' }
-      ];
-
-      const updateStatus = () => {
-        const current = statuses[statusIndex % statuses.length];
-        document.getElementById('status').textContent = current.status;
-        document.getElementById('details').textContent = current.details;
-        statusIndex++;
-      };
-
-      // Update status every 3 seconds
-      setInterval(updateStatus, 3000);
-      updateStatus();
-
-      // Try to set up IPC listener when available
-      const setupIPC = () => {
-        if (window.electronAPI && window.electronAPI.onStatusUpdate) {
-          console.log('Setting up IPC status updates');
-          window.electronAPI.onStatusUpdate((status, details) => {
-            console.log('Status update:', status, details);
-            document.getElementById('status').textContent = status;
-            document.getElementById('details').textContent = details || '';
-          });
-        } else {
-          setTimeout(setupIPC, 500);
+      console.log("Loading screen initialized - version 2.0");
+      
+      // Ensure updateStatus is immediately available
+      window.updateStatus = function(status, details) {
+        console.log("Updating status:", status, details);
+        try {
+          const statusEl = document.getElementById("status");
+          const detailsEl = document.getElementById("details");
+          if (statusEl) statusEl.textContent = status;
+          if (detailsEl) detailsEl.textContent = details || "";
+        } catch (e) {
+          console.error("Error updating status elements:", e);
         }
       };
-      setupIPC();
+
+      // Show that we're waiting for real updates
+      document.addEventListener("DOMContentLoaded", function() {
+        document.getElementById("status").textContent = "Waiting for app to start...";
+        document.getElementById("details").textContent = "Initializing main process";
+        console.log("DOM loaded, updateStatus function ready");
+      });
+      
+      // Also set immediately in case DOMContentLoaded already fired
+      if (document.readyState === "complete" || document.readyState === "interactive") {
+        document.getElementById("status").textContent = "Waiting for app to start...";
+        document.getElementById("details").textContent = "Initializing main process";
+        console.log("DOM already ready, updateStatus function ready");
+      }
     </script>
   </body>
 </html>
