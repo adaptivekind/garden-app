@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Garden App - Loading</title>
+    <title>Garden App - Loading ...</title>
     <style>
       body {
         margin: 0;
@@ -56,6 +56,8 @@
         font-size: 0.8em;
         opacity: 0.6;
         min-height: 1em;
+        word-break: break-all;
+        max-width: 80vw;
       }
     </style>
   </head>
@@ -69,33 +71,41 @@
     </div>
 
     <script>
-      // Listen for status updates from the main process
-      if (window.electronAPI) {
-        window.electronAPI.onStatusUpdate?.((status, details) => {
-          document.getElementById('status').textContent = status;
-          document.getElementById('details').textContent = details || '';
-        });
-      }
+      console.log("Loading screen initialized - version 2.0");
 
-      // Fallback status updates for when electronAPI isn't available yet
-      let statusIndex = 0;
-      const statuses = [
-        'Checking directory...',
-        'Starting garden process...',
-        'Waiting for garden server...',
-        'Checking port availability...',
-        'Almost ready...'
-      ];
-
-      const updateStatus = () => {
-        if (!window.electronAPI?.onStatusUpdate) {
-          document.getElementById('status').textContent = statuses[statusIndex % statuses.length];
-          statusIndex++;
+      // Ensure updateStatus is immediately available
+      window.updateStatus = function (status, details) {
+        console.log("Updating status:", status, details);
+        try {
+          const statusEl = document.getElementById("status");
+          const detailsEl = document.getElementById("details");
+          if (statusEl) statusEl.textContent = status;
+          if (detailsEl) detailsEl.textContent = details || "";
+        } catch (e) {
+          console.error("Error updating status elements:", e);
         }
       };
 
-      setInterval(updateStatus, 2000);
-      updateStatus();
+      // Show that we're waiting for real updates
+      document.addEventListener("DOMContentLoaded", function () {
+        document.getElementById("status").textContent =
+          "Waiting for app to start...";
+        document.getElementById("details").textContent =
+          "Initializing main process";
+        console.log("DOM loaded, updateStatus function ready");
+      });
+
+      // Also set immediately in case DOMContentLoaded already fired
+      if (
+        document.readyState === "complete" ||
+        document.readyState === "interactive"
+      ) {
+        document.getElementById("status").textContent =
+          "Waiting for app to start...";
+        document.getElementById("details").textContent =
+          "Initializing main process";
+        console.log("DOM already ready, updateStatus function ready");
+      }
     </script>
   </body>
 </html>

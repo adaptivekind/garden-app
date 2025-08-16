@@ -53,6 +53,25 @@
     <div class="error-container">
       <h1>⚠️ Garden Setup Required</h1>
       <p>Could not start the garden server.</p>
+      <div
+        id="error-details"
+        style="
+          background: rgba(255, 255, 255, 0.1);
+          padding: 15px;
+          border-radius: 5px;
+          margin: 20px 0;
+          text-align: left;
+          font-family: monospace;
+          font-size: 0.9em;
+          display: none;
+        "
+      >
+        <h4 style="margin-top: 0">Error Details:</h4>
+        <pre
+          id="error-message"
+          style="white-space: pre-wrap; word-wrap: break-word"
+        ></pre>
+      </div>
       <div style="text-align: left; max-width: 500px; margin: 20px auto">
         <h3>Please ensure:</h3>
         <ol>
@@ -94,8 +113,40 @@
       >
         Configure Directory
       </button>
+      <button
+        class="retry-button"
+        onclick="installGarden()"
+        style="margin-left: 10px"
+      >
+        Install Garden CLI
+      </button>
     </div>
     <script>
+      // Function to display error details
+      window.showErrorDetails = function (errorMessage) {
+        const errorDetails = document.getElementById("error-details");
+        const errorMessageEl = document.getElementById("error-message");
+        if (errorMessage && errorMessage.trim()) {
+          errorMessageEl.textContent = errorMessage;
+          errorDetails.style.display = "block";
+        }
+      };
+
+      // Listen for error details from main process
+      document.addEventListener("DOMContentLoaded", function () {
+        console.log("DOM loaded, setting up error listener");
+        console.log("electronAPI available:", !!window.electronAPI);
+        if (window.electronAPI && window.electronAPI.onShowErrorDetails) {
+          console.log("Setting up onShowErrorDetails listener");
+          window.electronAPI.onShowErrorDetails(function (errorMessage) {
+            console.log("Received error message via IPC:", errorMessage);
+            window.showErrorDetails(errorMessage);
+          });
+        } else {
+          console.error("electronAPI or onShowErrorDetails not available");
+        }
+      });
+
       async function retryGarden() {
         const button = document.querySelector(".retry-button");
         button.textContent = "Restarting...";
@@ -118,6 +169,29 @@
           await window.electronAPI.configureDirectory();
         } catch (error) {
           console.error("Failed to configure directory:", error);
+        }
+      }
+
+      async function installGarden() {
+        const button = event.target;
+        const originalText = button.textContent;
+        button.textContent = "Installing...";
+        button.disabled = true;
+
+        try {
+          await window.electronAPI.installGarden();
+          button.textContent = "Installed!";
+          setTimeout(() => {
+            button.textContent = originalText;
+            button.disabled = false;
+          }, 2000);
+        } catch (error) {
+          console.error("Failed to install Garden:", error);
+          button.textContent = "Install Failed";
+          setTimeout(() => {
+            button.textContent = originalText;
+            button.disabled = false;
+          }, 2000);
         }
       }
     </script>
