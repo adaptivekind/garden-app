@@ -77,10 +77,10 @@ function createWindow(): void {
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
-    // Small delay to ensure scripts are loaded, then send first status update
+    // Longer delay to ensure DOM and scripts are fully loaded
     setTimeout(() => {
       sendStatusUpdate("App ready", "Main window loaded");
-    }, 100);
+    }, 500);
   });
 
   mainWindow.on("closed", () => {
@@ -90,6 +90,99 @@ function createWindow(): void {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
+  });
+}
+
+function showErrorPage(errorMessage: string): void {
+  mainWindow?.loadFile("error.html").then(() => {
+    // Send error message via IPC instead of JavaScript injection
+    setTimeout(() => {
+      if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send("show-error-details", errorMessage);
+      }
+    }, 200);
+  });
+}
+
+async function installGardenCLI(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    console.log("Starting automatic Garden CLI installation...");
+    sendStatusUpdate("Installing Garden CLI...", "Checking for npm...");
+
+    const { spawn, execSync } = require("child_process");
+
+    // Enhanced PATH for npm detection
+    const enhancedPath = [
+      process.env.PATH,
+      "/usr/local/bin",
+      "/opt/homebrew/bin",
+      "/usr/bin",
+      process.env.HOME + "/.nvm/versions/node/latest/bin",
+    ]
+      .filter(Boolean)
+      .join(":");
+
+    // First check if npm is available
+    try {
+      execSync("which npm", {
+        stdio: "pipe",
+        timeout: 2000,
+        env: { ...process.env, PATH: enhancedPath },
+      });
+      console.log("npm command found");
+    } catch (error) {
+      console.error("npm command not found:", error);
+      reject(
+        new Error(
+          "npm is not installed or not found in PATH. Please install Node.js and npm first.\n\nDownload from: https://nodejs.org/",
+        ),
+      );
+      return;
+    }
+
+    sendStatusUpdate(
+      "Installing Garden CLI...",
+      "Running: npm install -g @adaptivekind/garden",
+    );
+
+    const npmProcess = spawn("npm", ["install", "-g", "@adaptivekind/garden"], {
+      stdio: "pipe",
+      env: { ...process.env, PATH: enhancedPath },
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    npmProcess.stdout?.on("data", (data: Buffer) => {
+      const output = data.toString();
+      stdout += output;
+      console.log("npm install stdout:", output.trim());
+      sendStatusUpdate("Installing Garden CLI...", "Please wait...");
+    });
+
+    npmProcess.stderr?.on("data", (data: Buffer) => {
+      const output = data.toString();
+      stderr += output;
+      console.log("npm install stderr:", output.trim());
+    });
+
+    npmProcess.on("close", (code: number) => {
+      if (code === 0) {
+        console.log("Garden CLI installed successfully");
+        sendStatusUpdate("Garden CLI installed!", "Restarting Garden...");
+        resolve();
+      } else {
+        const errorMsg = `Failed to install Garden CLI (exit code ${code})\nStdout: ${stdout}\nStderr: ${stderr}`;
+        console.error(errorMsg);
+        reject(new Error(errorMsg));
+      }
+    });
+
+    npmProcess.on("error", (error: Error) => {
+      const errorMsg = `Error running npm install: ${error.message}`;
+      console.error(errorMsg);
+      reject(new Error(errorMsg));
+    });
   });
 }
 
@@ -105,15 +198,21 @@ function sendStatusUpdate(status: string, details?: string): void {
         .replace(/'/g, "\\'")
         .replace(/\r?\n/g, " ");
 
+      // Wait for DOM to be ready before executing
       mainWindow.webContents
         .executeJavaScript(
           `
         try {
-          if (window.updateStatus) {
-            window.updateStatus('${escapedStatus}', '${escapedDetails}');
-          } else {
-            console.log('updateStatus function not available yet');
-          }
+          // Wait for updateStatus function to be available
+          const checkAndUpdate = () => {
+            if (window.updateStatus && typeof window.updateStatus === 'function') {
+              window.updateStatus('${escapedStatus}', '${escapedDetails}');
+            } else {
+              console.log('updateStatus function not available yet, retrying...');
+              setTimeout(checkAndUpdate, 50);
+            }
+          };
+          checkAndUpdate();
         } catch (e) {
           console.error('Error in sendStatusUpdate:', e);
         }
@@ -128,7 +227,7 @@ function sendStatusUpdate(status: string, details?: string): void {
   }
 }
 
-function startGarden(): Promise<void> {
+function startGarden(isRetryAfterInstall: boolean = false): Promise<void> {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     const gardenPath: string = currentGardenPath;
@@ -171,15 +270,38 @@ function startGarden(): Promise<void> {
         `[${Date.now() - startTime}ms] Garden command not found in PATH`,
       );
       console.log(`[${Date.now() - startTime}ms] Error:`, error);
-      sendStatusUpdate(
-        "Garden not found",
-        "Install: npm install -g @adaptivekind/garden",
-      );
-      reject(
-        new Error(
-          "Garden command not found. Please install: npm install -g @adaptivekind/garden",
-        ),
-      );
+
+      // Only attempt installation if this isn't already a retry after installation
+      if (!isRetryAfterInstall) {
+        console.log("Attempting automatic Garden CLI installation...");
+        installGardenCLI()
+          .then(() => {
+            // After successful installation, retry starting Garden
+            console.log("Retrying Garden startup after installation...");
+            setTimeout(() => {
+              startGarden(true).then(resolve).catch(reject);
+            }, 1000);
+          })
+          .catch((installError) => {
+            sendStatusUpdate(
+              "Garden installation failed",
+              "Manual installation required",
+            );
+            const fullError = `Garden command not found and automatic installation failed: ${installError.message}\n\nPlease manually install: npm install -g @adaptivekind/garden`;
+            showErrorPage(fullError);
+            reject(new Error(fullError));
+          });
+      } else {
+        // This is a retry after installation and Garden still not found
+        const errorMsg =
+          "Garden CLI installation appeared to succeed but Garden command still not found. Please check your PATH or restart the app.";
+        sendStatusUpdate(
+          "Garden still not found",
+          "Installation may have failed",
+        );
+        showErrorPage(errorMsg);
+        reject(new Error(errorMsg));
+      }
       return;
     }
 
@@ -221,15 +343,38 @@ function startGarden(): Promise<void> {
       console.error("PATH:", process.env.PATH);
       console.error("Working directory:", gardenPath);
       if (error.code === "ENOENT") {
-        sendStatusUpdate(
-          "Garden command not found",
-          "Please install: npm install -g @adaptivekind/garden",
-        );
-        reject(
-          new Error(
-            "Garden command not found. Please install @adaptivekind/garden globally: npm install -g @adaptivekind/garden",
-          ),
-        );
+        if (!isRetryAfterInstall) {
+          console.log(
+            "Garden process failed with ENOENT, attempting automatic installation...",
+          );
+          installGardenCLI()
+            .then(() => {
+              // After successful installation, retry starting Garden
+              console.log("Retrying Garden startup after installation...");
+              setTimeout(() => {
+                startGarden(true).then(resolve).catch(reject);
+              }, 1000);
+            })
+            .catch((installError) => {
+              sendStatusUpdate(
+                "Garden installation failed",
+                "Manual installation required",
+              );
+              const fullError = `Garden command not found and automatic installation failed: ${installError.message}\n\nPlease manually install: npm install -g @adaptivekind/garden`;
+              showErrorPage(fullError);
+              reject(new Error(fullError));
+            });
+        } else {
+          // This is a retry after installation and Garden still not found
+          const errorMsg =
+            "Garden CLI installation appeared to succeed but Garden command still not found. Please check your PATH or restart the app.";
+          sendStatusUpdate(
+            "Garden still not found",
+            "Installation may have failed",
+          );
+          showErrorPage(errorMsg);
+          reject(new Error(errorMsg));
+        }
       } else {
         sendStatusUpdate("Garden process error", error.message);
         reject(error);
@@ -473,7 +618,7 @@ function restartGarden(): void {
     })
     .catch((error) => {
       console.error("Error starting garden:", error);
-      mainWindow?.loadFile("error.html");
+      showErrorPage(error.message);
     });
 }
 
@@ -502,7 +647,7 @@ app.whenReady().then(() => {
     if (!fs.existsSync(currentGardenPath)) {
       console.log("Directory does not exist:", currentGardenPath);
       sendStatusUpdate("Directory not found", `Missing: ${currentGardenPath}`);
-      mainWindow?.loadFile("error.html");
+      showErrorPage(`Directory not found: ${currentGardenPath}`);
       // Show directory configuration dialog after a brief delay
       setTimeout(() => {
         configureDirectory();
@@ -520,7 +665,7 @@ app.whenReady().then(() => {
         .catch((error) => {
           console.error("Error starting garden:", error);
           sendStatusUpdate("Garden failed", error.message);
-          mainWindow?.loadFile("error.html");
+          showErrorPage(error.message);
         });
     }
   }, 200);
@@ -568,4 +713,21 @@ ipcMain.handle("restart-garden", async (): Promise<boolean> => {
 ipcMain.handle("configure-directory", async (): Promise<boolean> => {
   await configureDirectory();
   return true;
+});
+
+ipcMain.handle("install-garden", async (): Promise<boolean> => {
+  try {
+    await installGardenCLI();
+    // After successful installation, restart Garden
+    setTimeout(() => {
+      restartGarden();
+    }, 1000);
+    return true;
+  } catch (error) {
+    console.error("Failed to install Garden CLI:", error);
+    // Show the installation error on the error page
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    showErrorPage(`Garden CLI installation failed: ${errorMessage}`);
+    throw error;
+  }
 });

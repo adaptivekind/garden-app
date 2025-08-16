@@ -23,7 +23,6 @@
       "Bash(npm run eslint:*)",
       "Bash(npm rebuild:*)",
       "Bash(npx tsc:*)",
-      "Bash(npx asar extract:*)",
       "Bash(grep:*)"
     ],
     "deny": []

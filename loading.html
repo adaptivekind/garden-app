@@ -72,9 +72,9 @@
 
     <script>
       console.log("Loading screen initialized - version 2.0");
-      
+
       // Ensure updateStatus is immediately available
-      window.updateStatus = function(status, details) {
+      window.updateStatus = function (status, details) {
         console.log("Updating status:", status, details);
         try {
           const statusEl = document.getElementById("status");
@@ -87,16 +87,23 @@
       };
 
       // Show that we're waiting for real updates
-      document.addEventListener("DOMContentLoaded", function() {
-        document.getElementById("status").textContent = "Waiting for app to start...";
-        document.getElementById("details").textContent = "Initializing main process";
+      document.addEventListener("DOMContentLoaded", function () {
+        document.getElementById("status").textContent =
+          "Waiting for app to start...";
+        document.getElementById("details").textContent =
+          "Initializing main process";
         console.log("DOM loaded, updateStatus function ready");
       });
-      
+
       // Also set immediately in case DOMContentLoaded already fired
-      if (document.readyState === "complete" || document.readyState === "interactive") {
-        document.getElementById("status").textContent = "Waiting for app to start...";
-        document.getElementById("details").textContent = "Initializing main process";
+      if (
+        document.readyState === "complete" ||
+        document.readyState === "interactive"
+      ) {
+        document.getElementById("status").textContent =
+          "Waiting for app to start...";
+        document.getElementById("details").textContent =
+          "Initializing main process";
         console.log("DOM already ready, updateStatus function ready");
       }
     </script>
