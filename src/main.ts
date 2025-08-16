@@ -73,7 +73,7 @@ function createWindow(): void {
     show: false,
   });
 
-  mainWindow.loadFile("loading.html");
+  mainWindow.loadFile(path.join(__dirname, "..", "loading.html"));
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
@@ -94,7 +94,7 @@ function createWindow(): void {
 }
 
 function showErrorPage(errorMessage: string): void {
-  mainWindow?.loadFile("error.html").then(() => {
+  mainWindow?.loadFile(path.join(__dirname, "..", "error.html")).then(() => {
     // Send error message via IPC instead of JavaScript injection
     setTimeout(() => {
       if (mainWindow && mainWindow.webContents) {
@@ -111,9 +111,21 @@ async function installGardenCLI(): Promise<void> {
 
     const { spawn, execSync } = require("child_process");
 
+    // Get npm global bin directory and enhance PATH
+    let npmGlobalBin = "";
+    try {
+      npmGlobalBin = execSync("npm bin -g", { stdio: "pipe", timeout: 2000 })
+        .toString()
+        .trim();
+      console.log("npm global bin directory:", npmGlobalBin);
+    } catch (error) {
+      console.log("Could not get npm global bin directory:", error);
+    }
+
     // Enhanced PATH for npm detection
     const enhancedPath = [
       process.env.PATH,
+      npmGlobalBin, // Add the actual npm global bin directory
       "/usr/local/bin",
       "/opt/homebrew/bin",
       "/usr/bin",
@@ -142,13 +154,37 @@ async function installGardenCLI(): Promise<void> {
 
     sendStatusUpdate(
       "Installing Garden CLI...",
+      "Cleaning up old installation...",
+    );
+
+    // First try to uninstall any existing version
+    try {
+      execSync("npm uninstall -g @adaptivekind/garden", {
+        stdio: "pipe",
+        timeout: 10000,
+        env: { ...process.env, PATH: enhancedPath },
+      });
+      console.log("Removed existing Garden installation via npm");
+    } catch (uninstallError) {
+      console.log(
+        "npm uninstall failed, will try --force install:",
+        uninstallError,
+      );
+    }
+
+    sendStatusUpdate(
+      "Installing Garden CLI...",
       "Running: npm install -g @adaptivekind/garden",
     );
 
-    const npmProcess = spawn("npm", ["install", "-g", "@adaptivekind/garden"], {
-      stdio: "pipe",
-      env: { ...process.env, PATH: enhancedPath },
-    });
+    const npmProcess = spawn(
+      "npm",
+      ["install", "-g", "--force", "@adaptivekind/garden"],
+      {
+        stdio: "pipe",
+        env: { ...process.env, PATH: enhancedPath },
+      },
+    );
 
     let stdout = "";
     let stderr = "";
@@ -169,10 +205,75 @@ async function installGardenCLI(): Promise<void> {
     npmProcess.on("close", (code: number) => {
       if (code === 0) {
         console.log("Garden CLI installed successfully");
+
+        // Debug: Check where Garden was installed and if it's accessible
+        try {
+          const whichResult = execSync("which garden", {
+            stdio: "pipe",
+            env: { ...process.env, PATH: enhancedPath },
+          });
+          console.log("Garden found at:", whichResult.toString().trim());
+
+          const versionResult = execSync("garden --version", {
+            stdio: "pipe",
+            env: { ...process.env, PATH: enhancedPath },
+          });
+          console.log("Garden version:", versionResult.toString().trim());
+        } catch (debugError) {
+          console.error(
+            "Debug: Garden still not found after installation:",
+            debugError,
+          );
+          console.log(
+            "Debug: Current PATH in enhanced environment:",
+            enhancedPath,
+          );
+          console.log("Debug: Original PATH:", process.env.PATH);
+
+          // Check npm global bin directory
+          try {
+            const npmBin = execSync("npm bin -g", {
+              stdio: "pipe",
+              env: { ...process.env, PATH: enhancedPath },
+            });
+            console.log(
+              "Debug: npm global bin directory:",
+              npmBin.toString().trim(),
+            );
+
+            // Check if garden exists in npm bin directory
+            const gardenPath = npmBin.toString().trim() + "/garden";
+            console.log("Debug: Expected garden path:", gardenPath);
+
+            const fs = require("fs");
+            if (fs.existsSync(gardenPath)) {
+              console.log("Debug: Garden executable exists at expected path");
+            } else {
+              console.log(
+                "Debug: Garden executable NOT found at expected path",
+              );
+            }
+          } catch (npmBinError) {
+            console.error(
+              "Debug: Could not get npm bin directory:",
+              npmBinError,
+            );
+          }
+        }
+
         sendStatusUpdate("Garden CLI installed!", "Restarting Garden...");
         resolve();
       } else {
-        const errorMsg = `Failed to install Garden CLI (exit code ${code})\nStdout: ${stdout}\nStderr: ${stderr}`;
+        let errorMsg = `Failed to install Garden CLI (exit code ${code})\nStdout: ${stdout}\nStderr: ${stderr}`;
+
+        // Add specific instructions for ENOTEMPTY error
+        if (
+          stderr.includes("ENOTEMPTY") ||
+          stderr.includes("directory not empty")
+        ) {
+          errorMsg += `\n\nTo fix this manually:\n1. npm uninstall -g @adaptivekind/garden\n2. npm cache clean --force\n3. npm install -g @adaptivekind/garden\n\nOr restart this app and it will try again.`;
+        }
+
         console.error(errorMsg);
         reject(new Error(errorMsg));
       }
@@ -232,6 +333,46 @@ function startGarden(isRetryAfterInstall: boolean = false): Promise<void> {
     const startTime = Date.now();
     const gardenPath: string = currentGardenPath;
 
+    // Build enhanced PATH with common npm global bin locations
+    const commonNpmBinPaths = [
+      "/opt/homebrew/bin", // Homebrew on Apple Silicon
+      "/usr/local/bin", // Homebrew on Intel/standard installs
+      "/usr/bin", // System binaries
+    ];
+
+    // Try to get actual npm global bin directory
+    let npmGlobalBin = "";
+    const tempEnhancedPath = [process.env.PATH, ...commonNpmBinPaths]
+      .filter(Boolean)
+      .join(":");
+
+    try {
+      const { execSync } = require("child_process");
+      npmGlobalBin = execSync("npm bin -g", {
+        stdio: "pipe",
+        timeout: 2000,
+        env: { ...process.env, PATH: tempEnhancedPath },
+      })
+        .toString()
+        .trim();
+      console.log("Found npm global bin directory:", npmGlobalBin);
+    } catch (error) {
+      console.log(
+        "Could not get npm global bin directory, using common paths",
+        error,
+      );
+    }
+
+    // Enhanced PATH for Garden detection
+    const enhancedPath = [
+      process.env.PATH,
+      npmGlobalBin,
+      ...commonNpmBinPaths,
+      process.env.HOME + "/.nvm/versions/node/latest/bin",
+    ]
+      .filter(Boolean)
+      .join(":");
+
     sendStatusUpdate(
       `Checking directory : ${gardenPath} ...`,
       `Path: ${gardenPath}`,
@@ -256,11 +397,12 @@ function startGarden(isRetryAfterInstall: boolean = false): Promise<void> {
       console.log(
         `[${Date.now() - startTime}ms] Checking for garden command...`,
       );
-      console.log(
-        `[${Date.now() - startTime}ms] Current PATH:`,
-        process.env.PATH,
-      );
-      const result = execSync("which garden", { stdio: "pipe", timeout: 2000 });
+      console.log(`[${Date.now() - startTime}ms] Enhanced PATH:`, enhancedPath);
+      const result = execSync("which garden", {
+        stdio: "pipe",
+        timeout: 2000,
+        env: { ...process.env, PATH: enhancedPath },
+      });
       console.log(
         `[${Date.now() - startTime}ms] Garden command found at:`,
         result.toString().trim(),
@@ -271,8 +413,54 @@ function startGarden(isRetryAfterInstall: boolean = false): Promise<void> {
       );
       console.log(`[${Date.now() - startTime}ms] Error:`, error);
 
-      // Only attempt installation if this isn't already a retry after installation
-      if (!isRetryAfterInstall) {
+      // Check if Garden exists in common locations even if 'which' fails
+      const fs = require("fs");
+      const { execSync } = require("child_process");
+      const commonGardenPaths = [
+        "/opt/homebrew/bin/garden",
+        "/usr/local/bin/garden",
+        "/usr/bin/garden",
+      ];
+
+      for (const gardenExePath of commonGardenPaths) {
+        if (fs.existsSync(gardenExePath)) {
+          console.log(
+            `Found Garden at ${gardenExePath}, but 'which' failed. Trying direct execution.`,
+          );
+          // Try to run Garden directly with full path
+          try {
+            const versionResult = execSync(`${gardenExePath} --version`, {
+              stdio: "pipe",
+              timeout: 2000,
+            });
+            console.log(`Garden version: ${versionResult.toString().trim()}`);
+            console.log("Garden is working, updating spawn to use full path");
+
+            // Found working Garden! Skip to the normal spawn logic below
+            sendStatusUpdate(
+              "Starting garden ...",
+              `Running: ${gardenExePath} -p 8888`,
+            );
+
+            gardenProcess = spawn(gardenExePath, ["-p", "8888"], {
+              cwd: gardenPath, // gardenPath is the project directory
+              stdio: "pipe",
+              env: { ...process.env },
+            });
+
+            // Continue with normal process monitoring
+            break;
+          } catch (directError) {
+            console.log(
+              `Direct execution of ${gardenExePath} failed:`,
+              directError,
+            );
+          }
+        }
+      }
+
+      // Only attempt installation if we haven't found a working Garden and this isn't already a retry
+      if (!gardenProcess && !isRetryAfterInstall) {
         console.log("Attempting automatic Garden CLI installation...");
         installGardenCLI()
           .then(() => {
@@ -287,14 +475,33 @@ function startGarden(isRetryAfterInstall: boolean = false): Promise<void> {
               "Garden installation failed",
               "Manual installation required",
             );
-            const fullError = `Garden command not found and automatic installation failed: ${installError.message}\n\nPlease manually install: npm install -g @adaptivekind/garden`;
+            const fullError = `Garden command not found and automatic installation failed: ${installError.message}\n\nPlease manually install: npm install -g @adaptivekind/garden\n\nCurrent PATH: ${process.env.PATH}\n\nEnhanced PATH: ${enhancedPath}`;
             showErrorPage(fullError);
             reject(new Error(fullError));
           });
       } else {
         // This is a retry after installation and Garden still not found
-        const errorMsg =
-          "Garden CLI installation appeared to succeed but Garden command still not found. Please check your PATH or restart the app.";
+        // Check if garden exists in any of the PATH directories
+        const fs = require("fs");
+        const pathDirs = enhancedPath.split(":");
+        const gardenLocations = [];
+
+        for (const dir of pathDirs) {
+          const gardenPath = `${dir}/garden`;
+          if (fs.existsSync(gardenPath)) {
+            gardenLocations.push(gardenPath);
+          }
+        }
+
+        let errorMsg = `Garden CLI installation appeared to succeed but Garden command still not found.\n\nCurrent PATH: ${process.env.PATH}\n\nEnhanced PATH: ${enhancedPath}`;
+
+        if (gardenLocations.length > 0) {
+          errorMsg += `\n\nFound Garden executable(s) at:\n${gardenLocations.join("\n")}`;
+          errorMsg += `\n\nBut 'which garden' still fails. This might be a permissions issue.`;
+        } else {
+          errorMsg += `\n\nNo Garden executable found in any PATH directory.`;
+        }
+
         sendStatusUpdate(
           "Garden still not found",
           "Installation may have failed",
@@ -310,7 +517,7 @@ function startGarden(isRetryAfterInstall: boolean = false): Promise<void> {
     gardenProcess = spawn("garden", ["-p", "8888"], {
       cwd: gardenPath,
       stdio: "pipe",
-      env: { ...process.env, PATH: process.env.PATH + ":/opt/homebrew/bin" },
+      env: { ...process.env, PATH: enhancedPath },
     });
 
     console.log(
@@ -360,14 +567,33 @@ function startGarden(isRetryAfterInstall: boolean = false): Promise<void> {
                 "Garden installation failed",
                 "Manual installation required",
               );
-              const fullError = `Garden command not found and automatic installation failed: ${installError.message}\n\nPlease manually install: npm install -g @adaptivekind/garden`;
+              const fullError = `Garden command not found and automatic installation failed: ${installError.message}\n\nPlease manually install: npm install -g @adaptivekind/garden\n\nCurrent PATH: ${process.env.PATH}\n\nEnhanced PATH: ${enhancedPath}`;
               showErrorPage(fullError);
               reject(new Error(fullError));
             });
         } else {
           // This is a retry after installation and Garden still not found
-          const errorMsg =
-            "Garden CLI installation appeared to succeed but Garden command still not found. Please check your PATH or restart the app.";
+          // Check if garden exists in any of the PATH directories
+          const fs = require("fs");
+          const pathDirs = enhancedPath.split(":");
+          const gardenLocations = [];
+
+          for (const dir of pathDirs) {
+            const gardenPath = `${dir}/garden`;
+            if (fs.existsSync(gardenPath)) {
+              gardenLocations.push(gardenPath);
+            }
+          }
+
+          let errorMsg = `Garden CLI installation appeared to succeed but Garden command still not found.\n\nCurrent PATH: ${process.env.PATH}\n\nEnhanced PATH: ${enhancedPath}`;
+
+          if (gardenLocations.length > 0) {
+            errorMsg += `\n\nFound Garden executable(s) at:\n${gardenLocations.join("\n")}`;
+            errorMsg += `\n\nBut 'which garden' still fails. This might be a permissions issue.`;
+          } else {
+            errorMsg += `\n\nNo Garden executable found in any PATH directory.`;
+          }
+
           sendStatusUpdate(
             "Garden still not found",
             "Installation may have failed",
@@ -608,7 +834,7 @@ function restartGarden(): void {
     gardenProcess.kill();
   }
 
-  mainWindow?.loadFile("loading.html");
+  mainWindow?.loadFile(path.join(__dirname, "..", "loading.html"));
 
   startGarden()
     .then(() => {
